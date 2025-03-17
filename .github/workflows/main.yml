@@ -59,7 +59,7 @@ jobs:
           powershell Compress-Archive -Path portable-chromium -DestinationPath portable-chromium.zip
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4.6.1
         with:
           name: portable-chromium
           path: src/portable-chromium.zip
