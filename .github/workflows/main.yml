@@ -1,0 +1,64 @@
+name: Build Portable Chromium
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3
+
+      - name: Download Chromium source code
+        run: |
+          mkdir -p src
+          cd src
+          git clone https://github.com/chromium/chromium.git .
+          ./build/install-build-deps.sh
+
+      - name: Configure build for portable Chromium
+        run: |
+          cd src
+          gn gen out/Default --args='target_os="linux" target_cpu="x64" is_portable_build=true'
+
+      - name: Build Chromium
+        run: |
+          cd src
+          ninja -C out/Default chrome
+
+      - name: Package Portable Chromium
+        run: |
+          cd src
+          mkdir -p portable-chromium
+          cp -r out/Default/chrome portable-chromium/
+          cp -r out/Default/resources portable-chromium/
+          cp -r out/Default/locales portable-chromium/
+          cp -r out/Default/icudtl.dat portable-chromium/
+          cp -r out/Default/snapshot_blob.bin portable-chromium/
+          cp -r out/Default/v8_context_snapshot.bin portable-chromium/
+          cp -r out/Default/gen portable-chromium/
+          cp -r out/Default/*.pak portable-chromium/
+          cp -r out/Default/*.bin portable-chromium/
+          cp -r out/Default/*.dat portable-chromium/
+          tar -czvf portable-chromium.tar.gz portable-chromium
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: portable-chromium
+          path: src/portable-chromium.tar.gz
