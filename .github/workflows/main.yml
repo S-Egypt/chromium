@@ -56,10 +56,10 @@ jobs:
           cp -r out/Default/*.pak portable-chromium/
           cp -r out/Default/*.bin portable-chromium/
           cp -r out/Default/*.dat portable-chromium/
-          tar -czvf portable-chromium.tar.gz portable-chromium
+          powershell Compress-Archive -Path portable-chromium -DestinationPath portable-chromium.zip
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: portable-chromium
-          path: src/portable-chromium.tar.gz
+          path: src/portable-chromium.zip
