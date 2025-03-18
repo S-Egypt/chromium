@@ -11,37 +11,46 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v2
 
+      # Step 2: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.x'
 
+      # Step 3: Install dependencies
       - name: Install dependencies
         run: |
           choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --includeOptional"
           choco install ninja
           choco install git
 
+      # Step 4: Download Chromium source code and modify the script
       - name: Download Chromium source code
         run: |
           mkdir src
           cd src
           git clone https://github.com/chromium/chromium.git .
+          # Skip lsb_release check on Windows by commenting it out in the script
+          sed -i.bak 's/lsb_release/#lsb_release/g' build/install-build-deps.py
           python3 build/install-build-deps.py
 
+      # Step 5: Configure build for portable Chromium
       - name: Configure build for portable Chromium
         run: |
           cd src
           gn gen out/Default --args='target_os="win" target_cpu="x64" is_portable_build=true'
 
+      # Step 6: Build Chromium
       - name: Build Chromium
         run: |
           cd src
           ninja -C out/Default chrome
 
+      # Step 7: Package Portable Chromium
       - name: Package Portable Chromium
         run: |
           cd src
@@ -58,6 +67,7 @@ jobs:
           cp -r out/Default/*.dat portable-chromium/
           powershell Compress-Archive -Path portable-chromium -DestinationPath portable-chromium.zip
 
+      # Step 8: Upload artifact
       - name: Upload artifact
         uses: actions/upload-artifact@v4.6.1
         with:
