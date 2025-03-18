@@ -44,15 +44,11 @@ jobs:
           cd src
           gn gen out/Default --args='target_os="win" target_cpu="x64" is_portable_build=true'
 
-      # Step 6: Build Chromium
-      - name: Build Chromium
+      # Step 6: Build Chromium and Package Portable Chromium
+      - name: Build and Package Portable Chromium
         run: |
           cd src
           ninja -C out/Default chrome
-
-      # Step 7: Package Portable Chromium
-        run: |
-          cd src
           mkdir -p portable-chromium
           cp -r out/Default/chrome.exe portable-chromium/
           cp -r out/Default/resources portable-chromium/
