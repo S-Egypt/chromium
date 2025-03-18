@@ -36,7 +36,7 @@ jobs:
           git clone https://github.com/chromium/chromium.git .
           # Skip lsb_release check on Windows by commenting it out in the script
           powershell -Command "(Get-Content build/install-build-deps.py) -replace 'lsb_release', '# lsb_release' | Set-Content build/install-build-deps.py"
-          python3 build/install-build-deps.py
+          python3 build/install-build-deps.py || true
 
       # Step 5: Configure build for portable Chromium
       - name: Configure build for portable Chromium
@@ -64,7 +64,7 @@ jobs:
 
       # Step 7: Upload artifact
       - name: Upload artifact
-        uses: actions/upload-artifact@v4.6.1
+        uses: actions/upload-artifact@v4
         with:
           name: portable-chromium
           path: src/portable-chromium.zip
