@@ -29,7 +29,7 @@ jobs:
           choco install git
           # Install depot_tools which includes gn
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          echo "::add-path::${{github.workspace}}/depot_tools"
+          echo "depot_tools" >> $GITHUB_PATH
 
       # Step 4: Download Chromium source code and modify the script
       - name: Download Chromium source code
