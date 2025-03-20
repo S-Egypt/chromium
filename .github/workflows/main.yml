@@ -38,19 +38,21 @@ jobs:
           cd src
           git clone https://github.com/chromium/chromium.git .
           # Skip lsb_release check on Windows by commenting it out in the script
-          powershell -Command "(Get-Content build/install-build-deps.py) -replace 'lsb_release', '#lsb_release' | Set-Content build/install-build-deps.py"
+          powershell -Command "(Get-Content build/install-build-deps.py) -replace 'lsb_release', '# lsb_release' | Set-Content build/install-build-deps.py"
           python3 build/install-build-deps.py || true
 
       # Step 5: Configure build for portable Chromium
       - name: Configure build for portable Chromium
         run: |
           cd src
+          export PATH="$PATH:$(pwd)/depot_tools"
           gn gen out/Default --args='target_os="win" target_cpu="x64" is_portable_build=true'
 
       # Step 6: Build and Package Portable Chromium
       - name: Build and Package Portable Chromium
         run: |
           cd src
+          export PATH="$PATH:$(pwd)/depot_tools"
           ninja -C out/Default chrome
           mkdir -p portable-chromium
           cp -r out/Default/chrome.exe portable-chromium/
