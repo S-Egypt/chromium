@@ -45,14 +45,14 @@ jobs:
       - name: Configure build for portable Chromium
         run: |
           cd src
-          export PATH="$PATH:$(pwd)/depot_tools"
+          $env:PATH += ";$(pwd)/depot_tools"
           gn gen out/Default --args='target_os="win" target_cpu="x64" is_portable_build=true'
 
       # Step 6: Build and Package Portable Chromium
       - name: Build and Package Portable Chromium
         run: |
           cd src
-          export PATH="$PATH:$(pwd)/depot_tools"
+          $env:PATH += ";$(pwd)/depot_tools"
           ninja -C out/Default chrome
           mkdir -p portable-chromium
           cp -r out/Default/chrome.exe portable-chromium/
