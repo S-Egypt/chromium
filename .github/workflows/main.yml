@@ -41,7 +41,15 @@ jobs:
           powershell -Command "(Get-Content build/install-build-deps.py) -replace 'lsb_release', '#lsb_release' | Set-Content build/install-build-deps.py"
           python3 build/install-build-deps.py || true
 
-      # Step 5: Configure build for portable Chromium
+      # Step 5: Fetch and install gn tool
+      - name: Fetch and install gn tool
+        shell: pwsh
+        run: |
+          cd src
+          $env:PATH += ";$pwd\depot_tools"
+          gclient sync
+
+      # Step 6: Configure build for portable Chromium
       - name: Configure build for portable Chromium
         shell: pwsh
         run: |
@@ -49,7 +57,7 @@ jobs:
           $env:PATH += ";$pwd\depot_tools"
           gn gen out/Default --args='target_os="win" target_cpu="x64" is_portable_build=true'
 
-      # Step 6: Build and Package Portable Chromium
+      # Step 7: Build and Package Portable Chromium
       - name: Build and Package Portable Chromium
         shell: pwsh
         run: |
@@ -69,7 +77,7 @@ jobs:
           cp -r out/Default/*.dat portable-chromium/
           powershell Compress-Archive -Path portable-chromium -DestinationPath portable-chromium.zip
 
-      # Step 7: Upload artifact
+      # Step 8: Upload artifact
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
