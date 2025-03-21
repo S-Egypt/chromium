@@ -41,16 +41,21 @@ jobs:
     - name: Download depot_tools
       run: |
         git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ~/depot_tools
-        echo "export PATH=$HOME/depot_tools:$PATH" >> $GITHUB_ENV
+        echo "export PATH=$HOME/depot_tools:\$PATH" >> $GITHUB_ENV
+        echo "export PATH=$HOME/depot_tools:\$PATH" >> ~/.bashrc
+        source ~/.bashrc
 
     - name: Configure gclient
       run: |
         echo "solutions = [
-        {\"name\": \"src\", \"url\": \"https://chromium.googlesource.com/chromium/src.git\", \"deps_file\": \"DEPS\", \"managed\": False, \"custom_deps\": {}}]
+        {"name": "src", "url": "https://chromium.googlesource.com/chromium/src.git", "deps_file": "DEPS", "managed": False, "custom_deps": {}}]
         custom_vars = {}" > ~/.gclient
 
     - name: Sync Chromium Source
-      run: gclient sync --no-history
+      run: |
+        export PATH=$HOME/depot_tools:$PATH
+        source ~/.bashrc
+        gclient sync --no-history
 
     - name: Set up ccache
       run: |
