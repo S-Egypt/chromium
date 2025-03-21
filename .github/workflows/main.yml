@@ -18,8 +18,11 @@ jobs:
     env:
       PATH: $HOME/depot_tools:$PATH
     steps:
+    - name: Check tar availability
+      run: which tar || echo "tar not found"
+
     - name: Install tar
-      run: sudo apt-get update && sudo apt-get install -y tar
+      run: apt-get update && apt-get install -y tar
 
     - name: Checkout code
       uses: actions/checkout@v3
