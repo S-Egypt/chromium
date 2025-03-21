@@ -1,50 +1,84 @@
-name: Build Chromium
+name: Chromium Build
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [browser, renderer, webrtc]
     steps:
-      - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Cache Chromium src
-        id: cache-chromium-src
-        uses: actions/cache@v3
-        with:
-          path: src/
-          key: ${{ runner.os }}-chromium-src-${{ hashFiles('src/DEPS') }}
-          restore-keys: |
-            ${{ runner.os }}-chromium-src-
+    - name: Cache depot_tools
+      uses: actions/cache@v3
+      with:
+        path: ~/depot_tools
+        key: depot_tools-${{ runner.os }}-${{ github.sha }}
+        restore-keys: depot_tools-${{ runner.os }}-
 
-      - name: Download Chromium source if no cache hit
-        if: steps.cache-chromium-src.outputs.cache-hit != 'true'
-        run: |
-              echo "Cache not found. Downloading Chromium source..."
-              # Replace with your actual commands to fetch Chromium source if needed
-              # This could be `git clone` or other custom scripts to download only necessary parts.  
-              # Example:
-              # git clone --depth 1 https://chromium.googlesource.com/chromium/src.git src
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
 
+    - name: Cache .gclient
+      uses: actions/cache@v3
+      with:
+        path: ~/.gclient
+        key: gclient-${{ runner.os }}-${{ github.sha }}
+        restore-keys: gclient-${{ runner.os }}-
 
-          # Add other relevant files to the key if needed (e.g., build config files)
+    - name: Download depot_tools
+      run: |
+        git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ~/depot_tools
+        echo "export PATH=$HOME/depot_tools:$PATH" >> $GITHUB_ENV
 
+    - name: Configure gclient
+      run: |
+        echo "solutions = [
+        {\"name\": \"src\", \"url\": \"https://chromium.googlesource.com/chromium/src.git\", \"deps_file\": \"DEPS\", \"managed\": False, \"custom_deps\": {}}]
+        custom_vars = {}" > ~/.gclient
 
-      # ... your build steps for Chromium ...  (e.g. using gn, ninja)
-      - name: Build Chromium
-        run: |
-          cd src
-          gn gen out/Default  # Example: generate build files. Replace with your actual build configuration.
-          ninja -C out/Default chrome  # Example: Build Chrome. Adapt to your target.
+    - name: Sync Chromium Source
+      run: gclient sync --no-history
 
-      # ... any post-build steps ...
+    - name: Set up ccache
+      run: |
+        ccache --max-size=5G
+        ccache --show-stats
 
-      - name: Upload build artifacts (Optional)
-        uses: actions/upload-artifact@v3
-        if: success() # Only upload if the build was successful.
-        with:
-          name: chromium-build
-          path: src/out/Default  # Replace with the actual path to your build output.
+    - name: Cache Build Output
+      uses: actions/cache@v3
+      with:
+        path: out/Default
+        key: build-output-${{ runner.os }}-${{ github.sha }}
+        restore-keys: build-output-${{ runner.os }}-
+
+    - name: Cache Ninja Log
+      uses: actions/cache@v3
+      with:
+        path: out/Default/.ninja_log
+        key: ninja-log-${{ runner.os }}-${{ github.sha }}
+        restore-keys: ninja-log-${{ runner.os }}-
+
+    - name: Build Chromium Component
+      run: |
+        ccache --zero-stats
+        autoninja -C out/Default ${{ matrix.component }}
+        ccache --show-stats
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: chromium-build
+        path: out/Default
