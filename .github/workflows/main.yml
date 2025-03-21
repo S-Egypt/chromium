@@ -15,6 +15,8 @@ jobs:
     strategy:
       matrix:
         component: [browser, renderer, webrtc]
+    env:
+      PATH: $HOME/depot_tools:$PATH
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -29,7 +31,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.x'
 
     - name: Cache .gclient
       uses: actions/cache@v3
@@ -41,24 +43,33 @@ jobs:
     - name: Download depot_tools
       run: |
         git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ~/depot_tools
-        echo "export PATH=$HOME/depot_tools:\$PATH" >> $GITHUB_ENV
-        echo "export PATH=$HOME/depot_tools:\$PATH" >> ~/.bashrc
+        echo "export PATH=$HOME/depot_tools:$PATH" >> $GITHUB_ENV
+        echo "export PATH=$HOME/depot_tools:$PATH" >> ~/.bashrc
         source ~/.bashrc
 
     - name: Configure gclient
       run: |
-        echo "solutions = [
-        {"name": "src", "url": "https://chromium.googlesource.com/chromium/src.git", "deps_file": "DEPS", "managed": False, "custom_deps": {}}]
-        custom_vars = {}" > ~/.gclient
+        cat <<EOT > ~/.gclient
+        solutions = [
+          {
+            "name": "src",
+            "url": "https://chromium.googlesource.com/chromium/src.git",
+            "deps_file": "DEPS",
+            "managed": False,
+            "custom_deps": {}
+          }
+        ]
+        custom_vars = {}
+        EOT
 
     - name: Sync Chromium Source
       run: |
-        export PATH=$HOME/depot_tools:$PATH
-        source ~/.bashrc
+        set -e
         gclient sync --no-history
 
     - name: Set up ccache
       run: |
+        ccache --clear
         ccache --max-size=5G
         ccache --show-stats
 
@@ -66,23 +77,25 @@ jobs:
       uses: actions/cache@v3
       with:
         path: out/Default
-        key: build-output-${{ runner.os }}-${{ github.sha }}
+        key: build-output-${{ runner.os }}-${{ github.run_id }}
         restore-keys: build-output-${{ runner.os }}-
 
     - name: Cache Ninja Log
       uses: actions/cache@v3
       with:
         path: out/Default/.ninja_log
-        key: ninja-log-${{ runner.os }}-${{ github.sha }}
+        key: ninja-log-${{ runner.os }}-${{ github.run_id }}
         restore-keys: ninja-log-${{ runner.os }}-
 
     - name: Build Chromium Component
       run: |
+        set -e
         ccache --zero-stats
         autoninja -C out/Default ${{ matrix.component }}
         ccache --show-stats
 
     - name: Upload Build Artifacts
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: chromium-build
