@@ -1,92 +1,50 @@
-name: Build Portable Chromium
+name: Build Chromium
 
 on:
   push:
     branches:
       - main
-      - 'release/*'
 
 jobs:
   build:
-    runs-on: windows-latest
-
+    runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout the code
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
-      # Step 2: Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - name: Cache Chromium src
+        id: cache-chromium-src
+        uses: actions/cache@v3
         with:
-          python-version: '3.x'
+          path: src/
+          key: ${{ runner.os }}-chromium-src-${{ hashFiles('src/DEPS') }}
+          restore-keys: |
+            ${{ runner.os }}-chromium-src-
 
-      # Step 3: Install dependencies
-      - name: Install dependencies
+      - name: Download Chromium source if no cache hit
+        if: steps.cache-chromium-src.outputs.cache-hit != 'true'
         run: |
-          choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --includeOptional"
-          choco install ninja
-          choco install git
-          # Install depot_tools which includes gn
-          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          echo "$env:GITHUB_WORKSPACE/depot_tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+              echo "Cache not found. Downloading Chromium source..."
+              # Replace with your actual commands to fetch Chromium source if needed
+              # This could be `git clone` or other custom scripts to download only necessary parts.  
+              # Example:
+              # git clone --depth 1 https://chromium.googlesource.com/chromium/src.git src
 
-      # Step 4: Download Chromium source code and modify the script
-      - name: Download Chromium source code
-        run: |
-          mkdir src
-          cd src
-          git clone https://github.com/chromium/chromium.git .
-          # Skip lsb_release check on Windows by commenting it out in the script
-          powershell -Command "(Get-Content build/install-build-deps.py) -replace 'lsb_release', '#lsb_release' | Set-Content build/install-build-deps.py"
-          python3 build/install-build-deps.py || true
 
-      # Step 5: Configure depot_tools and gclient
-      - name: Configure depot_tools and gclient
-        shell: pwsh
-        run: |
-          cd $env:GITHUB_WORKSPACE/depot_tools
-          gclient config --spec 'solutions=[{"name":"src","url":"https://chromium.googlesource.com/chromium/src.git","deps_file":"DEPS","managed":False,"custom_deps":{},"custom_vars":{}}]'
+          # Add other relevant files to the key if needed (e.g., build config files)
 
-      # Step 6: Fetch and install gn tool
-      - name: Fetch and install gn tool
-        shell: pwsh
+
+      # ... your build steps for Chromium ...  (e.g. using gn, ninja)
+      - name: Build Chromium
         run: |
           cd src
-          $env:PATH += ";$pwd\depot_tools"
-          gclient sync
+          gn gen out/Default  # Example: generate build files. Replace with your actual build configuration.
+          ninja -C out/Default chrome  # Example: Build Chrome. Adapt to your target.
 
-      # Step 7: Configure build for portable Chromium
-      - name: Configure build for portable Chromium
-        shell: pwsh
-        run: |
-          cd src
-          $env:PATH += ";$pwd\depot_tools"
-          gn gen out/Default --args='target_os="win" target_cpu="x64" is_portable_build=true'
+      # ... any post-build steps ...
 
-      # Step 8: Build and Package Portable Chromium
-      - name: Build and Package Portable Chromium
-        shell: pwsh
-        run: |
-          cd src
-          $env:PATH += ";$pwd\depot_tools"
-          ninja -C out/Default chrome
-          mkdir -p portable-chromium
-          cp -r out/Default/chrome.exe portable-chromium/
-          cp -r out/Default/resources portable-chromium/
-          cp -r out/Default/locales portable-chromium/
-          cp -r out/Default/icudtl.dat portable-chromium/
-          cp -r out/Default/snapshot_blob.bin portable-chromium/
-          cp -r out/Default/v8_context_snapshot.bin portable-chromium/
-          cp -r out/Default/gen portable-chromium/
-          cp -r out/Default/*.pak portable-chromium/
-          cp -r out/Default/*.bin portable-chromium/
-          cp -r out/Default/*.dat portable-chromium/
-          powershell Compress-Archive -Path portable-chromium -DestinationPath portable-chromium.zip
-
-      # Step 9: Upload artifact
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload build artifacts (Optional)
+        uses: actions/upload-artifact@v3
+        if: success() # Only upload if the build was successful.
         with:
-          name: portable-chromium
-          path: src/portable-chromium.zip
+          name: chromium-build
+          path: src/out/Default  # Replace with the actual path to your build output.
