@@ -17,9 +17,10 @@ jobs:
       matrix:
         component: [browser, renderer, webrtc]
     env:
-      DEPOT_TOOLS_WIN_TOOLCHAIN: 0
-      CHROMIUM_BUILDTOOLS_PATH: ${{ github.workspace }}\buildtools
-      CHROMIUM_USER_DATA_DIR: ${{ github.workspace }}\ChromiumPortable\Profile
+      DEPOT_TOOLS_WIN_TOOLCHAIN: 0  # Set to 0 to use the default toolchain
+      CHROMIUM_BUILDTOOLS_PATH: ${{ github.workspace }}\buildtools  # Path to build tools
+      CHROMIUM_USER_DATA_DIR: ${{ github.workspace }}\ChromiumPortable\Profile  # Path to user data directory
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -28,23 +29,23 @@ jobs:
         uses: actions/cache@v3
         with:
           path: out/Default
-          key: build-output-${{ runner.os }}-${{ github.run_id }}
+          key: build-output-${{ runner.os }}-${{ github.run_id }}-${{ matrix.component }}
           restore-keys: build-output-${{ runner.os }}-
 
       - name: Install Dependencies
         run: |
-          choco install ninja python cmake openssl --yes
-          python -m pip install --upgrade pip
-          python -m pip install gn cryptography
+          choco install ninja python cmake openssl --yes  # Install necessary dependencies
+          python -m pip install --upgrade pip  # Upgrade pip
+          python -m pip install gn cryptography  # Install additional Python packages
 
       - name: Download depot_tools
         run: |
-          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ${{ github.workspace }}\depot_tools
-          echo "${{ github.workspace }}\depot_tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ${{ github.workspace }}\depot_tools  # Clone depot_tools
+          echo "${{ github.workspace }}\depot_tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append  # Add depot_tools to PATH
 
       - name: Configure gclient
         run: |
-          echo "solutions = [{\"name\": \"src\", \"url\": \"https://chromium.googlesource.com/chromium/src.git\", \"deps_file\": \"DEPS\", \"managed\": False, \"custom_deps\": {}}]" | Out-File -FilePath .gclient -Encoding utf8
+          echo "solutions = [{\"name\": \"src\", \"url\": \"https://chromium.googlesource.com/chromium/src.git\", \"deps_file\": \"DEPS\", \"managed\": False, \"custom_deps\": {}}]" | Out-File -FilePath .gclient -Encoding utf8  # Configure gclient
 
       - name: Sync Chromium Source
         run: |
@@ -56,30 +57,30 @@ jobs:
 
       - name: Set up ccache
         run: |
-          vcpkg install ccache
-          ccache --recache
-          ccache --show-stats
+          vcpkg install ccache  # Install ccache
+          ccache --recache  # Recache ccache
+          ccache --show-stats  # Show ccache stats
 
       - name: Build Chromium Component
         run: |
-          ccache --zero-stats
-          autoninja -C out/Default ${{ matrix.component }}
-          ccache --show-stats
+          ccache --zero-stats  # Zero ccache stats
+          autoninja -C out/Default ${{ matrix.component }}  # Build the specified component
+          ccache --show-stats  # Show ccache stats
 
       - name: Package Portable Chromium
         run: |
-          mkdir -p ${{ github.workspace }}\ChromiumPortable
-          Copy-Item -Path "out/Default/chrome.exe" -Destination "${{ github.workspace }}\ChromiumPortable\"
-          echo "@echo off" > ${{ github.workspace }}\ChromiumPortable\launch.bat
-          echo "openssl enc -aes-256-cbc -d -in Profile.enc -out Profile -k ${{ secrets.PROFILE_PASSWORD }}" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
-          echo "if %ERRORLEVEL% NEQ 0 exit /b 1" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
-          echo "chrome.exe --user-data-dir=Profile" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
-          echo "openssl enc -aes-256-cbc -in Profile -out Profile.enc -k ${{ secrets.PROFILE_PASSWORD }}" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
-          echo "del /s /q Profile" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
-          Compress-Archive -Path ${{ github.workspace }}\ChromiumPortable -DestinationPath ${{ github.workspace }}\ChromiumPortable.zip
+          mkdir -p ${{ github.workspace }}\ChromiumPortable  # Create the portable directory
+          Copy-Item -Path "out/Default/chrome.exe" -Destination "${{ github.workspace }}\ChromiumPortable\"  # Copy the Chromium executable
+          echo "@echo off" > ${{ github.workspace }}\ChromiumPortable\launch.bat  # Create the launch script
+          echo "openssl enc -aes-256-cbc -d -in Profile.enc -out Profile -k ${{ secrets.PROFILE_PASSWORD }}" >> ${{ github.workspace }}\ChromiumPortable\launch.bat  # Decrypt the profile
+          echo "if %ERRORLEVEL% NEQ 0 exit /b 1" >> ${{ github.workspace }}\ChromiumPortable\launch.bat  # Check for decryption errors
+          echo "chrome.exe --user-data-dir=Profile" >> ${{ github.workspace }}\ChromiumPortable\launch.bat  # Launch Chromium with the decrypted profile
+          echo "openssl enc -aes-256-cbc -in Profile -out Profile.enc -k ${{ secrets.PROFILE_PASSWORD }}" >> ${{ github.workspace }}\ChromiumPortable\launch.bat  # Encrypt the profile
+          echo "del /s /q Profile" >> ${{ github.workspace }}\ChromiumPortable\launch.bat  # Delete the decrypted profile
+          Compress-Archive -Path ${{ github.workspace }}\ChromiumPortable -DestinationPath ${{ github.workspace }}\ChromiumPortable.zip  # Compress the portable directory
 
       - name: Upload Portable Build
         uses: actions/upload-artifact@v4
         with:
-          name: Chromium-Portable-Windows
-          path: ${{ github.workspace }}\ChromiumPortable.zip
+          name: Chromium-Portable-Windows  # Name of the artifact
+          path: ${{ github.workspace }}\ChromiumPortable.zip  # Path to the artifact
