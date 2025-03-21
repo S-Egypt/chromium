@@ -1,4 +1,4 @@
-name: Chromium Build
+name: Chromium Windows Portable Build
 
 on:
   push:
@@ -11,108 +11,75 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         component: [browser, renderer, webrtc]
     env:
-      PATH: $HOME/depot_tools:$PATH
+      DEPOT_TOOLS_WIN_TOOLCHAIN: 0
+      CHROMIUM_BUILDTOOLS_PATH: ${{ github.workspace }}\buildtools
+      CHROMIUM_USER_DATA_DIR: ${{ github.workspace }}\ChromiumPortable\Profile
     steps:
-    - name: Check tar availability
-      run: command -v tar || echo "tar not found"
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Install tar if missing
-      run: |
-        if ! command -v tar &> /dev/null; then
-          if command -v apt-get &> /dev/null; then
-            apt-get update && apt-get install -y tar
-          elif command -v yum &> /dev/null; then
-            yum install -y tar
-          else
-            echo "No supported package manager found. Please install tar manually."
-            exit 1
-          fi
-        fi
+      - name: Cache Build Output
+        uses: actions/cache@v3
+        with:
+          path: out/Default
+          key: build-output-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: build-output-${{ runner.os }}-
 
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Install Dependencies
+        run: |
+          choco install ninja python cmake openssl --yes
+          python -m pip install --upgrade pip
+          python -m pip install gn cryptography
 
-    - name: Cache depot_tools
-      uses: actions/cache@v3
-      with:
-        path: ~/depot_tools
-        key: depot_tools-${{ runner.os }}-${{ github.sha }}
-        restore-keys: depot_tools-${{ runner.os }}-
+      - name: Download depot_tools
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ${{ github.workspace }}\depot_tools
+          echo "${{ github.workspace }}\depot_tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
+      - name: Configure gclient
+        run: |
+          echo "solutions = [{\"name\": \"src\", \"url\": \"https://chromium.googlesource.com/chromium/src.git\", \"deps_file\": \"DEPS\", \"managed\": False, \"custom_deps\": {}}]" | Out-File -FilePath .gclient -Encoding utf8
 
-    - name: Cache .gclient
-      uses: actions/cache@v3
-      with:
-        path: ~/.gclient
-        key: gclient-${{ runner.os }}-${{ github.sha }}
-        restore-keys: gclient-${{ runner.os }}-
+      - name: Sync Chromium Source
+        run: |
+          for ($i=0; $i -lt 3; $i++) {
+            gclient sync --no-history && break
+            echo "Retrying in 10 seconds..."
+            Start-Sleep -s 10
+          }
 
-    - name: Download depot_tools
-      run: |
-        git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ~/depot_tools
-        echo "$HOME/depot_tools" >> $GITHUB_PATH
+      - name: Set up ccache
+        run: |
+          vcpkg install ccache
+          ccache --recache
+          ccache --show-stats
 
-    - name: Configure gclient
-      run: |
-        cat <<EOT > ~/.gclient
-        {
-          "solutions": [
-            {
-              "name": "src",
-              "url": "https://chromium.googlesource.com/chromium/src.git",
-              "deps_file": "DEPS",
-              "managed": false,
-              "custom_deps": {}
-            }
-          ],
-          "custom_vars": {}
-        }
-        EOT
+      - name: Build Chromium Component
+        run: |
+          ccache --zero-stats
+          autoninja -C out/Default ${{ matrix.component }}
+          ccache --show-stats
 
-    - name: Sync Chromium Source
-      run: |
-        set -e
-        gclient sync --no-history
+      - name: Package Portable Chromium
+        run: |
+          mkdir -p ${{ github.workspace }}\ChromiumPortable
+          Copy-Item -Path "out/Default/chrome.exe" -Destination "${{ github.workspace }}\ChromiumPortable\"
+          echo "@echo off" > ${{ github.workspace }}\ChromiumPortable\launch.bat
+          echo "openssl enc -aes-256-cbc -d -in Profile.enc -out Profile -k ${{ secrets.PROFILE_PASSWORD }}" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
+          echo "if %ERRORLEVEL% NEQ 0 exit /b 1" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
+          echo "chrome.exe --user-data-dir=Profile" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
+          echo "openssl enc -aes-256-cbc -in Profile -out Profile.enc -k ${{ secrets.PROFILE_PASSWORD }}" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
+          echo "del /s /q Profile" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
+          Compress-Archive -Path ${{ github.workspace }}\ChromiumPortable -DestinationPath ${{ github.workspace }}\ChromiumPortable.zip
 
-    - name: Set up ccache
-      run: |
-        ccache --clear
-        ccache --max-size=5G
-        ccache --show-stats
-
-    - name: Cache Build Output
-      uses: actions/cache@v3
-      with:
-        path: out/Default
-        key: build-output-${{ runner.os }}-${{ github.run_id }}
-        restore-keys: build-output-${{ runner.os }}-
-
-    - name: Cache Ninja Log
-      uses: actions/cache@v3
-      with:
-        path: out/Default/.ninja_log
-        key: ninja-log-${{ runner.os }}-${{ github.run_id }}
-        restore-keys: ninja-log-${{ runner.os }}-
-
-    - name: Build Chromium Component
-      run: |
-        set -e
-        ccache --zero-stats
-        autoninja -C out/Default ${{ matrix.component }}
-        ccache --show-stats
-
-    - name: Upload Build Artifacts
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: chromium-build
-        path: out/Default
+      - name: Upload Portable Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chromium-Portable-Windows
+          path: ${{ github.workspace }}\ChromiumPortable.zip
