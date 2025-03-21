@@ -78,7 +78,7 @@ jobs:
         ccache --show-stats
 
     - name: Upload Build Artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: chromium-build
         path: out/Default
