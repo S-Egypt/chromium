@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+    branches:
       - main
   workflow_dispatch:
 
@@ -27,7 +28,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: out/Default
-          key: build-output-${{ runner.os }}-${{ matrix.component }}-${{ github.run_id }}
+          key: build-output-${{ runner.os }}-${{ matrix.component }}-${{ github.sha }}
+          restore-keys: |
+            build-output-${{ runner.os }}-${{ matrix.component }}-
           restore-keys: build-output-${{ runner.os }}-${{ matrix.component }}-
 
       - name: Install Dependencies
@@ -67,7 +70,8 @@ jobs:
         run: |
           for ($i=0; $i -lt 3; $i++) {
             gclient sync --no-history && break
-            echo "Retrying in 10 seconds..."
+            echo "Sync failed. Retrying in 10 seconds..."
+            gclient sync --verbose
             Start-Sleep -s 10
           }
 
@@ -79,7 +83,11 @@ jobs:
 
       - name: Build Chromium Component
         run: |
-          ccache --zero-stats
+          if (ccache -s | Select-String "cache hit" -Quiet) {
+            echo "Cache is in use, skipping zero-stats"
+          } else {
+            ccache --zero-stats
+          }
           autoninja -C out/Default ${{ matrix.component }}
           ccache --show-stats
 
@@ -88,7 +96,12 @@ jobs:
           mkdir -p ${{ github.workspace }}\ChromiumPortable
           Copy-Item -Path "out/Default/chrome.exe" -Destination "${{ github.workspace }}\ChromiumPortable\"
           echo "@echo off" > ${{ github.workspace }}\ChromiumPortable\launch.bat
-          echo "openssl enc -aes-256-cbc -d -in Profile.enc -out Profile -k ${{ secrets.PROFILE_PASSWORD }}" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
+          echo "openssl enc -aes-256-cbc -d -in Profile.enc -out Profile -k ${{ secrets.PROFILE_PASSWORD }}"
+          if %ERRORLEVEL% NEQ 0 (
+            echo "Decryption failed. Incorrect password or corrupted file."
+            pause
+            exit /b 1
+          ) >> ${{ github.workspace }}\ChromiumPortable\launch.bat
           echo "if %ERRORLEVEL% NEQ 0 exit /b 1" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
           echo "chrome.exe --user-data-dir=Profile" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
           echo "openssl enc -aes-256-cbc -in Profile -out Profile.enc -k ${{ secrets.PROFILE_PASSWORD }}" >> ${{ github.workspace }}\ChromiumPortable\launch.bat
