@@ -68,7 +68,10 @@ jobs:
       - name: Sync Chromium Source
         run: |
           for ($i=0; $i -lt 3; $i++) {
-            gclient sync --no-history && break
+            gclient sync --no-history
+            if ($?) { exit 0 }
+            echo "Sync failed. Retrying in 10 seconds..."
+            Start-Sleep -s 10
             echo "Sync failed. Retrying in 10 seconds..."
             gclient sync --verbose
             Start-Sleep -s 10
