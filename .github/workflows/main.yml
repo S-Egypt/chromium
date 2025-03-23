@@ -29,10 +29,9 @@ jobs:
         with:
           path: out/Default
           key: build-output-${{ runner.os }}-${{ matrix.component }}-${{ github.sha }}
-          restore-keys: |
-            build-output-${{ runner.os }}-${{ matrix.component }}-
           restore-keys: build-output-${{ runner.os }}-${{ matrix.component }}-
-
+                      build-output-${{ runner.os }}-${{ matrix.component }}-
+          
       - name: Install Dependencies
         run: |
           choco install ninja python cmake openssl --yes
