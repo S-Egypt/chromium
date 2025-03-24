@@ -22,18 +22,17 @@ jobs:
       CHROMIUM_USER_DATA_DIR: ${{ github.workspace }}\ChromiumPortable\Profile
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Cache Build Output
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: out/Default
           key: build-output-${{ runner.os }}-${{ matrix.component }}-${{ github.run_id }}
-          restore-keys: build-output-${{ runner.os }}-${{ matrix.component }}-
 
       - name: Install Dependencies
         run: |
-          choco install ninja python cmake openssl ccache --yes
+          choco install ninja python cmake openssl --yes
           python -m pip install --upgrade pip
           python -m pip install gn cryptography
 
@@ -66,20 +65,20 @@ jobs:
 
       - name: Sync Chromium Source
         run: |
-          for ($i=0; $i -lt 3; $i++) {
+          $attempts = 0
+          while ($attempts -lt 3) {
             gclient sync --no-history && break
             echo "Sync failed. Retrying in 10 seconds..."
-            gclient sync --verbose
             Start-Sleep -s 10
+            $attempts++
           }
+          if ($attempts -eq 3) { exit 1 }
 
       - name: Set up ccache
         run: |
-          $ccachePath = (Get-Command ccache -ErrorAction SilentlyContinue).Source
-          if (-Not $ccachePath) {
-            echo "ccache not found, setting path manually"
-            $env:PATH += ";C:\ProgramData\chocolatey\bin"
-          }
+          choco install ccache --yes
+          $env:Path += ";C:\ProgramData\chocolatey\bin"
+          ccache --version
           ccache --recache
           ccache --show-stats
 
